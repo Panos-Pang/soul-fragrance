@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>你的气味图鉴</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Premium Dark Aesthetic (Zinc-950, Zinc-100 text, subtle Zinc-800 borders) -->
+    <!-- Application Structure Plan: Linear SPA flow (Start -> Quiz -> Loading -> Result). Uses DOM manipulation to toggle view visibility. Result view includes a Chart.js Radar chart to visualize the user's personality dimensions, adding data-driven insight to the qualitative test. -->
+    <!-- Visualization & Content Choices: Questionnaire -> Interactive buttons. Result Composition -> Chart.js Radar chart (No SVG/Mermaid) to show the balance of dimensions. Perfume Recommendations -> Flexbox cards. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;700&display=swap');
+        body {
+            font-family: 'Noto Serif SC', serif;
+            background-color: #09090b;
+            color: #f4f4f5;
+            overflow-x: hidden;
+        }
+        .fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .spin {
+            animation: spin 1.2s linear infinite;
+        }
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 280px;
+            max-height: 300px;
+        }
+        .glass-panel {
+            background: rgba(24, 24, 27, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        #toast {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            opacity: 0;
+            transform: translateY(-20px);
+            pointer-events: none;
+        }
+        #toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col items-center">
+
+    <div id="toast" class="fixed top-8 z-50 bg-white text-black px-6 py-3 rounded-full font-bold shadow-2xl tracking-widest text-sm">
+        测评链接已复制，快去发给懂你的人吧！
+    </div>
+
+    <div class="fixed inset-0 pointer-events-none" style="background: radial-gradient(circle at 50% 50%, rgba(39, 39, 42, 0.4) 0%, rgba(9, 9, 11, 1) 100%);"></div>
+
+    <div id="view-start" class="w-full max-w-md mx-auto min-h-screen flex flex-col justify-center items-center p-6 z-10 fade-in">
+        <h1 class="text-4xl md:text-5xl font-bold tracking-[0.25em] mb-6 text-transparent bg-clip-text bg-gradient-to-br from-zinc-100 to-zinc-500 text-center leading-tight">
+            你的气味图鉴
+        </h1>
+        <p class="text-zinc-400 mb-12 text-center tracking-widest text-sm leading-loose">
+            我们好奇你闻起来怎么样？
+        </p>
+        <button id="btn-start" class="px-10 py-4 bg-white text-black rounded-full font-bold tracking-[0.2em] hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.15)]">
+            闻一下
+        </button>
+    </div>
+
+    <div id="view-quiz" class="w-full max-w-lg mx-auto min-h-screen flex flex-col justify-center p-6 z-10 hidden fade-in">
+        <div class="w-full bg-zinc-900 h-1 mb-8 rounded-full overflow-hidden">
+            <div id="q-progress" class="bg-zinc-200 h-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <p id="q-count" class="text-xs text-zinc-500 mb-6 tracking-[0.2em] uppercase font-mono"></p>
+        <h2 id="q-text" class="text-xl sm:text-2xl font-medium leading-loose mb-10 text-zinc-200"></h2>
+        <div id="q-opts" class="space-y-4"></div>
+    </div>
+
+    <div id="view-loading" class="w-full min-h-screen flex flex-col items-center justify-center p-6 z-10 hidden">
+        <div class="w-16 h-16 border-2 border-t-white border-zinc-800 rounded-full spin mb-8"></div>
+        <p id="loading-text" class="animate-pulse tracking-[0.2em] text-zinc-300 text-sm">正在为你萃取气味配方...</p>
+    </div>
+
+    <div id="view-result" class="w-full max-w-md mx-auto min-h-screen flex flex-col items-center p-4 sm:p-6 pb-24 z-10 hidden fade-in">
+        
+        <div class="w-full glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden mt-6">
+            <p class="text-center text-xs text-zinc-500 tracking-[0.3em] mb-8 font-bold">你闻起来像这个</p>
+            
+            <div class="aspect-square w-full max-w-[220px] mx-auto bg-zinc-900 rounded-2xl flex flex-col items-center justify-center border border-zinc-800 mb-8 relative overflow-hidden">
+                <div id="res-img-placeholder" class="flex flex-col items-center justify-center">
+                    <span class="text-5xl mb-4 opacity-80">✨</span>
+                    <p class="text-[10px] text-zinc-600 uppercase tracking-widest mb-2">AI Line Art Vision</p>
+                </div>
+                <img id="res-image" src="" alt="Scent Vision" class="absolute inset-0 w-full h-full object-cover z-10 hidden" onload="document.getElementById('res-img-placeholder').style.display='none'" onerror="this.style.display='none'; document.getElementById('res-img-placeholder').style.display='flex';">
+            </div>
+
+            <div class="mb-8 border-b border-zinc-800 pb-8">
+                <!-- 修改点：不再显示代号，直接显示香水中文+英文名 -->
+                <h2 id="res-code" class="text-center text-xl font-bold tracking-widest mb-5 text-white leading-snug"></h2>
+                <p id="res-desc" class="text-center text-sm text-zinc-300 leading-loose font-bold mb-6"></p>
+                <p id="res-quote" class="text-center text-xs text-zinc-500 leading-loose italic px-2"></p>
+            </div>
+
+            <div class="mb-8 p-5 bg-zinc-900/80 rounded-2xl border border-zinc-800">
+                <h3 class="text-center text-xs font-bold tracking-[0.2em] text-zinc-400 mb-5">■ 灵魂香调成分解析 ■</h3>
+                <div class="space-y-5 text-xs sm:text-sm leading-relaxed text-zinc-400">
+                    <p><span class="text-white font-bold tracking-wider inline-block w-24">前调 (社交)</span><span id="comp-top"></span></p>
+                    <p><span class="text-white font-bold tracking-wider inline-block w-24">中调 (核心)</span><span id="comp-mid"></span></p>
+                    <p><span class="text-white font-bold tracking-wider inline-block w-24">后调 (潜念)</span><span id="comp-base"></span></p>
+                </div>
+            </div>
+
+            <div class="mb-8 p-5 bg-zinc-900/80 rounded-2xl border border-zinc-800">
+                <h3 class="text-center text-xs font-bold tracking-[0.2em] text-zinc-400 mb-2">■ 你的气味... ■</h3>
+                <div class="chart-container">
+                    <canvas id="radarChart"></canvas>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <h3 class="text-center text-xs font-bold tracking-[0.2em] text-zinc-400 mb-5">■ 或许你还会喜欢 ■</h3>
+                <div id="res-perfumes" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <div class="w-full max-w-md mt-10 space-y-4">
+            <p class="text-center text-zinc-500 text-xs tracking-widest">截图保存上方海报，或使用下方按钮分享</p>
+            <button id="btn-copy" class="w-full py-4 bg-white text-black rounded-full font-bold tracking-[0.2em] hover:bg-zinc-200 transition-colors">
+                一键复制测评链接
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const initialQs = [
+            { id: 1, text: '你走进一部电梯，里面没有楼层按钮，只有一支正在演奏低音提琴的爵士乐队，和正中央一把空着的丝绒沙发。你会：', opts: [{ t: '坐上沙发，点一首欢快的曲子，甚至想和乐手合影。', s: { E: 3 } }, { t: '坦然坐上沙发，随着音乐点点头，享受这突如其来的VIP待遇。', s: { E: 1 } }, { t: '假装看手机，默默站在角落，避免和乐手有眼神交流。', s: { I_soc: 1 } }, { t: '僵硬地站在最边缘，面壁思过，祈祷电梯赶紧停住甚至想逃出去。', s: { I_soc: 3 } }] },
+            { id: 2, text: '科技公司送了你一个与你一模一样的AI替身，它可以完美模仿你的语气替你社交。你会怎么用它？', opts: [{ t: '带着它一起去派对，两个“我”一起炒热气氛，快乐翻倍！', s: { E: 3 } }, { t: '让它替我去开无聊的会议，我自己去和真正的好友聚餐。', s: { E: 1 } }, { t: '让它去应付所有同事和无效社交，我终于可以安心在家看剧了。', s: { I_soc: 1 } }, { t: '感到极度恐慌，立刻拔掉电源。我不需要替身，我只想世界毁灭。', s: { I_soc: 3 } }] },
+            { id: 3, text: '你误入了一个不认识任何人的顶级蒙面舞会，大门突然锁死，一小时后才开启。你会：', opts: [{ t: '既然戴着面具，那就彻底放飞自我，冲进舞池中央当神秘主角。', s: { E: 3 } }, { t: '找个看起来顺眼的陌生人搭话，反正谁也不认识谁。', s: { E: 1 } }, { t: '迅速锁定自助餐台，端满一盘吃的，找个没人的角落慢慢吃。', s: { I_soc: 1 } }, { t: '躲进洗手间或者最隐蔽的盆栽后面，默默倒数一小时等门开。', s: { I_soc: 3 } }] },
+            { id: 4, text: '在绝对安静的美术馆里，你的手机不慎滑落，精准地滑进了一幅价值连城且布满红外线警报器的中世纪油画底座下方。你会：', opts: [{ t: '潇洒转身离开，或者平静地去前台找工作人员处理。手机罢了。', s: { S: 3 } }, { t: '趴在警戒线外，试图用极其缓慢且稳妥的动作把它够出来。', s: { S: 1 } }, { t: '留在原地疯狂进行无声的肢体表演，试图引起保安的同情帮我捡。', s: { C: 1 } }, { t: '主动按下墙上的火警警报。既然要闹大，不如让大家一起陪我乱！', s: { C: 3 } }] },
+            { id: 5, text: '深夜回家，小区里的流浪猫突然拦住你，清了清嗓子，用标准的播音腔对你说：“我知道你去年夏天干了什么。”你的反应是：', opts: [{ t: '蹲下来冷酷谈判：“小点声，说吧，你要多少罐头才肯保守秘密？”', s: { S: 3 } }, { t: '愣了一秒，然后自我催眠：“肯定是太累幻听了”，假装没听见走开。', s: { S: 1 } }, { t: '大脑宕机，发出尖锐的爆鸣声，连夜打包行李准备跑路。', s: { C: 1 } }, { t: '兴奋地搓手：“太帅了！那你能不能顺便教教我怎么隐身？”', s: { C: 3 } }] },
+            { id: 6, text: '你每天早上用的咖啡机，今天突然流出了温热的泥浆，但你尝了一口，味道居然是完美的顶级浓缩咖啡。你会：', opts: [{ t: '立刻把机器断电拆开清洗，这绝对有安全隐患，不能喝。', s: { S: 3 } }, { t: '倒掉泥浆，认命地出门去楼下星巴克买一杯正常的。', s: { S: 1 } }, { t: '犹豫一下，既然味道是对的，捏着鼻子一口闷了，提神就行。', s: { C: 1 } }, { t: '无所谓甚至觉得很酷，拍照发朋友圈：“极品泥浆”，明天继续喝。', s: { C: 3 } }] },
+            { id: 7, text: '你在租来的房子里发现了一扇暗门，里面有个红色按钮，写着：“按下它，世界上会消失一个微小的烦恼，但会随机新增另一个等价烦恼。”你会：', opts: [{ t: '坚决不按，把门锁死。变量不可控且收益期望为零的游戏，绝对不碰。', s: { T: 3 } }, { t: '严谨地架设好摄像机，按下一记，观察接下来的变化并记录数据。', s: { T: 1 } }, { t: '在按钮周围摆上鲜花和蜡烛，把它当成平庸生活里唯一的魔法神迹。', s: { F: 1 } }, { t: '像敲木鱼一样疯狂连按。只要世界在变化，我就觉得充满乐趣。', s: { F: 3 } }] },
+            { id: 8, text: '在浓雾弥漫的森林里，你遇到一台散发微光的自动贩卖机。它不收钱，只收“一段核心记忆”作为交换来掉落未知物品。你会：', opts: [{ t: '用“最痛苦的记忆”去换一罐冰镇可乐。主打一个资源优化配置。', s: { T: 3 } }, { t: '试图猛踹贩卖机，看看能不能白嫖点什么，不想付出真实记忆。', s: { T: 1 } }, { t: '把我“最开心的一段记忆”投进去。看看能掉出个什么极极品道具。', s: { F: 1 } }, { t: '拒绝交易。无论是痛苦还是快乐，都是我灵魂的养料，我不换。', s: { F: 3 } }] },
+            { id: 9, text: '你突然发现自己身处一部楚门的世界般的电影里，你只是个配角。你会：', opts: [{ t: '试图找出摄像机和导演，用逻辑打破第四面墙，夺回控制权。', s: { T: 3 } }, { t: '既然是演戏，那就开始敷衍了事，当个NPC，反正也没人看。', s: { T: 1 } }, { t: '顺其自然地沉浸在角色里，说不定配角也有属于自己的平淡幸福。', s: { F: 1 } }, { t: '疯狂给自己加戏，展现最炸裂的演技，甚至爱上主角演成传奇。', s: { F: 3 } }] },
+            { id: 10, text: '某天醒来，你发现自己能看到所有人头顶上漂浮的“剩余寿命余额”，除了你自己。你会：', opts: [{ t: '立刻将能力变现，转型成为全球最精准的寿险精算师，狂赚一笔。', s: { R: 3 } }, { t: '无视这些数字该干嘛干嘛。反正大家都要死，而我今天还要交房租。', s: { R: 1 } }, { t: '专门去结交那些倒计时只剩一两周的人，陪他们走完最后疯狂的一程。', s: { I_phi: 1 } }, { t: '连夜搬到杳无人烟的深山老林，躲避这巨大的情感负荷。', s: { I_phi: 3 } }] },
+            { id: 11, text: '另一个平行宇宙的“你”突然掉进客厅，塞给你半个三明治，压低声音说“千万别去冰岛！”，然后消失了。你会：', opts: [{ t: '默默吃掉那半个三明治，把去冰岛从遗愿清单里永久划掉。', s: { R: 3 } }, { t: '觉得这是某种幻觉，继续过日子，但短期内不去冰岛了。', s: { R: 1 } }, { t: '用接下来的十年死磕量子力学，发誓要找到办法穿越过去问个究竟。', s: { I_phi: 1 } }, { t: '反骨顿生，立刻掏出手机买明天飞冰岛的机票。我倒要看有什么。', s: { I_phi: 3 } }] },
+            { id: 12, text: '一栋废弃大楼起火，里面只有一架名贵的绝版钢琴。你有能力毫发无伤地救出它，但世界上永远不会有人知道是你做的。你会去救吗？', opts: [{ t: '绝对不救。没有观众、没有收益，毫无意义的冒险。', s: { R: 3 } }, { t: '拍个视频发网上，配文“绝版钢琴要烧了可惜”，然后离开。', s: { R: 1 } }, { t: '站在火场外默默为它哀悼，认为这是艺术终将毁灭的宿命美感。', s: { I_phi: 1 } }, { t: '毫不犹豫冲进去救。是为了那架钢琴能继续存在于世间，不为任何人。', s: { I_phi: 3 } }] },
+            { id: 13, text: '死神半夜出现在你床前说：“不好意思走错门了。不过来都来了，你想看个魔术吗？”你会：', opts: [{ t: '“不用了谢谢，走的时候麻烦帮我把垃圾带下楼。”', s: { R: 1, S: 1 } }, { t: '“好啊，你能把我原地变成一滩没有烦恼的液体吗？”', s: { I_phi: 1, C: 1 } }, { t: '“如果你变出的兔子不能帮我偿还花呗，那将毫无意义。”', s: { R: 3, T: 1 } }, { t: '“好啊，最好把我直接带走，让我见识一下地狱长什么样！”', s: { trigger_egg: 'EASTER_CRAZY' } }] }
+        ];
+
+        const resultsDB = {
+            'ESTR': { desc: "清醒、广阔，如同大地与干练木质的交织。你带着葡萄柚与香根草的硬朗，不相信眼泪，只相信规则和力量。", quotes: ["“在所有稳固的根基中，唯有最深处的泥土不渴望天空。” ——《沉思录》马可·奥勒留", "“大地不是一个被动的容器，而是一场永恒的、无声的征服。” ——《大地的梦想》加斯东·巴什拉", "“黄金时代的果实总是带有苦涩的内核，唯有吞咽者方可加冕。” ——《赫耳墨斯文集》"], perfumes: [{ name: "爱马仕 大地", eng: "Hermès - Terre d'Hermès", top: "葡萄柚、橙子、打火石", mid: "玫瑰、广藿香、天竺葵", base: "香根草、安息香脂、雪松" }, { name: "香奈儿 蔚蓝", eng: "Chanel - Bleu de Chanel", top: "柠檬、薄荷、粉红胡椒", mid: "生姜、肉豆蔻、茉莉", base: "檀香木、香根草、焚香" }, { name: "信仰 拿破仑之水", eng: "Creed - Aventus", top: "菠萝、香柠檬、黑加仑", mid: "桦木、广藿香、摩洛哥茉莉", base: "麝香、橡木苔、龙涎香" }] },
+            'ISTR': { desc: "喧嚣是他们的，你只需要干净的白衬衫和不被打扰的周末。带着大吉岭茶与皂感的清冷克制，情绪极其稳定。", quotes: ["“在沸水中舒展的并非叶片，而是某种甘愿被剥离的宁静。” ——《茶之书》冈仓天心", "“灵魂的洁净，往往建立在对世界的彻底漠视之上。” ——《不安之书》佩索阿", "“那不曾映照过任何飞鸟的冰川之水，才是镜子最初的模样。” ——《给青年诗人的信》里尔克"], perfumes: [{ name: "宝格丽 大吉岭茶", eng: "Bvlgari - Pour Homme", top: "茶叶、醛、香柠檬", mid: "胡椒、愈创木、鸢尾花", base: "麝香、雪松、橡木苔" }, { name: "普拉达 鸢尾轻芳", eng: "Prada - Infusion d'Iris", top: "橙花油、橙子、乳香", mid: "鸢尾花、白松香", base: "香根草、雪松、安息香脂" }, { name: "信仰 银色山泉", eng: "Creed - Silver Mountain Water", top: "香柠檬、橘子、橙花", mid: "茶叶、黑加仑", base: "白松香、麝香、檀香木" }] },
+            'ECTR': { desc: "带着一丝侵略性的迷人质感，如同燃烧的乌木与辛辣的薰衣草。你不按套路出牌，灵魂深处燃烧着打破常规的野心。", quotes: ["“最珍贵的香木，唯有在烈火的折磨下，才肯吐露它的野心。” ——《蔷薇园》萨迪", "“我不渴望安宁，我渴望在秩序的缝隙里种下带刺的薰衣草。” ——《恶之花》波德莱尔", "“权力的气味，是夹杂着生锈铁刃与靡靡之花的晚风。” ——《历史》希罗多德"], perfumes: [{ name: "圣罗兰 自由之水", eng: "YSL - Libre", top: "薰衣草、橘子、苦橙叶", mid: "橙花、沙巴茉莉", base: "马达加斯加香草、雪松" }, { name: "汤姆·福特 珍华乌木", eng: "Tom Ford - Oud Wood", top: "花椒、红百里香", mid: "沉香(乌木)、海地香根草", base: "零陵香豆、琥珀、香草" }, { name: "爱马仕 尼罗河花园", eng: "Hermès - Un Jardin Sur Le Nil", top: "青芒果、葡萄柚、番茄", mid: "莲花、风信子、香蒲", base: "麝香、鸢尾花、焚香" }] },
+            'ICTR': { desc: "散发着阴冷苦涩的柏树与潮湿香根草气息。如同深渊里的静默者，拒绝取悦任何人，只有跨过荆棘才能嗅到你灵魂底部的纯粹。", quotes: ["“我曾在灰烬中寻找语言，发现最深邃的词汇不过是一截炭化的枯木。” ——《保罗·策兰诗选》", "“墓园里的柏树不结悲伤的果实，它们只负责将沉默刺入天空。” ——《杜伊诺哀歌》里尔克", "“我们的归宿不是光，而是那散发着潮湿霉味、孕育万物的黑暗。” ——《诺斯替福音》"], perfumes: [{ name: "莱俪 墨恋", eng: "Lalique - Encre Noire", top: "柏树、醋酸香根草", mid: "波旁香根草、鸢尾根", base: "喀什米尔木、麝香" }, { name: "香奈儿 梧桐影木", eng: "Chanel - Sycomore", top: "柏树、粉红胡椒、杜松子", mid: "香根草、檀香木", base: "醛、烟草、紫罗兰" }, { name: "芦丹氏 孤女", eng: "Serge Lutens - L'Orpheline", top: "焚香、黑胡椒、醛", mid: "麝香、迷迭香", base: "广藿香、灰烬气息" }] },
+            'ESFR': { desc: "温暖、甜腻、让人上瘾，如同黑咖啡混合着香草与焦糖。你游刃有余地穿梭在人间烟火中，为他人提供情绪价值。", quotes: ["“在糖衣融化的瞬间，世界短暂地原谅了我们所有的清醒。” ——《追忆似水年华》普鲁斯特", "“那是黑夜的汁液，滚烫、苦涩，却能换取人类最廉价的狂欢。” ——《人间喜剧》巴尔扎克", "“比起虚无缥缈的神明，我更信仰这充满香草与肉体温度的凡尘。” ——《金阁寺》三岛由纪夫"], perfumes: [{ name: "圣罗兰 黑鸦片", eng: "YSL - Black Opium", top: "梨、粉红胡椒、橙花", mid: "咖啡、茉莉、甘草", base: "香草、广藿香、雪松" }, { name: "迪奥 小姐", eng: "Dior - Miss Dior", top: "鸢尾花、牡丹、铃兰", mid: "千叶玫瑰、桃子、杏", base: "香草、零陵香豆、麝香" }, { name: "兰蔻 美丽人生", eng: "Lancôme - La Vie Est Belle", top: "黑加仑、梨、佛手柑", mid: "鸢尾花、茉莉、橙花", base: "果仁糖、香草、广藿香" }] },
+            'ISFR': { desc: "你不在乎宏大叙事，只在乎今天的阳光。灵魂柔软治愈，散发着海盐、白花与清晨微风般极度放松的慵懒香气。", quotes: ["“最高级的神圣，隐匿在星期天早晨刚刚晒干的亚麻布里。” ——《空间诗学》巴什拉", "“海风不记得它吹散的悲伤，它只留下嘴唇上微咸的释然。” ——《海浪》伍尔夫", "“万物之中，唯有最不可触碰的柔软，才能抵御岁月坚硬的磨损。” ——《道德经》老子"], perfumes: [{ name: "梅森马吉拉 慵懒周末", eng: "Maison Margiela - Lazy Sunday Morning", top: "醛、铃兰、梨", mid: "玫瑰、鸢尾花", base: "白麝香、黄葵" }, { name: "百瑞德 白色浪漫", eng: "Byredo - Blanche", top: "醛、粉红胡椒、千叶玫瑰", mid: "牡丹、紫罗兰", base: "麝香、檀香木、金发木" }, { name: "祖玛珑 鼠尾草与海盐", eng: "Jo Malone - Wood Sage & Sea Salt", top: "黄葵籽、葡萄柚", mid: "海盐、海藻", base: "鼠尾草、愈创木" }] },
+            'ECFR': { desc: "宏大、华丽、极具张力，如同被烈酒浸泡的红玫瑰与醉人的樱桃。如果你要爱就必须是惊涛骇浪，平庸对你来说就是死亡。", quotes: ["“一朵滴血的玫瑰，胜过一万座枯燥的真理之塔。” ——《查泰莱夫人的情人》劳伦斯", "“把熟透的樱桃碾碎吧，我们在鲜红的汁液中品尝毁灭的甘甜。” ——《恶之花》波德莱尔", "“这不羁的灵魂，必须在最浓烈的焚香中，上演一场无人观看的殉道。” ——《莎乐美》王尔德"], perfumes: [{ name: "馥马尔 贵妇肖像", eng: "Frederic Malle - Portrait of a Lady", top: "玫瑰、丁香、覆盆子", mid: "广藿香、焚香、檀香木", base: "麝香、安息香脂、琥珀" }, { name: "汤姆·福特 失落樱桃", eng: "Tom Ford - Lost Cherry", top: "酸樱桃、烈酒、苦杏仁", mid: "土耳其玫瑰、李子", base: "零陵香豆、秘鲁香脂、香草" }, { name: "潘海利根 致命温柔", eng: "Penhaligon's - Artemisia", top: "油桃、绿叶、苹果", mid: "铃兰、茉莉、香草", base: "橡木苔、檀香木、琥珀" }] },
+            'ICFR': { desc: "内心有一座温暖的壁炉，带着隐秘的黑加仑绿意与玫瑰幽香。只有极少数人，能闻到你灵魂深处的温柔。", quotes: ["“那片被碾碎的黑色叶子里，藏着一个已经死去的温热夏天。” ——《佩德罗·巴拉莫》鲁尔福", "“不要惊动果实里的蜜，它需要在阴影中独自发酵成隐秘的宇宙。” ——《奥义书》", "“外面是凛冽的风雪，而我在灵魂深处为自己生起了一炉不灭的炭火。” ——《我的米海尔》奥兹"], perfumes: [{ name: "蒂普提克 影中之水", eng: "Diptyque - L'Ombre Dans L'Eau", top: "黑加仑叶、橘子", mid: "保加利亚玫瑰、香柠檬", base: "龙涎香、麝香" }, { name: "勒拉博 红茶29", eng: "Le Labo - Thé Noir 29", top: "无花果、月桂叶、香柠檬", mid: "雪松、香根草", base: "烟草、干草" }, { name: "芦丹氏 柏林少女", eng: "Serge Lutens - La Fille de Berlin", top: "玫瑰、老鹳草", mid: "玫瑰草", base: "广藿香、橡木苔、蜂蜜" }] },
+            'ESTI': { desc: "游走在人群中，却始终保持着抽离的哲学思考。带着干燥的皮革、檀木与无花果叶的清苦，像一位冷眼旁观却洞悉一切的观察家。", quotes: ["“最锋利的不是刀刃，而是那写满箴言、早已干枯泛黄的纸莎草。” ——《吉尔伽美什史诗》", "“檀木的香气不在于取悦神明，而在于见证肉身的朽坏。” ——《西藏生死书》", "“陈旧的皮革记录了多少次流浪，就有多少个被抛弃的故乡。” ——《游牧思想》德勒兹"], perfumes: [{ name: "勒拉博 檀香木33", eng: "Le Labo - Santal 33", top: "紫罗兰叶、小豆蔻", mid: "鸢尾花、纸莎草", base: "澳大利亚檀香木、皮革" }, { name: "百瑞德 吉普赛之水", eng: "Byredo - Gypsy Water", top: "香柠檬、杜松子", mid: "焚香、松树针叶", base: "琥珀、香草、檀香木" }, { name: "蒂普提克 希腊无花果", eng: "Diptyque - Philosykos", top: "无花果叶、无花果", mid: "椰子、绿叶", base: "雪松、木质香" }] },
+            'ISTI': { desc: "物质对你来说毫无意义。灵魂早已褪去浮华，在宁静幽远的焚香、雪松与东方寺庙的枯木气息中找到了安放。", quotes: ["“看那缕升腾的青烟，它唯一的目的就是消失在无形之中。” ——《入中论》月称", "“在雪松环绕的古寺里，连敲击木鱼的声响都带着某种不朽的霉味。” ——《春雪》三岛由纪夫", "“我们应当像这株常绿的桃金娘，在所有的季节里保持静默的拒绝。” ——《瓦尔登湖》梭罗"], perfumes: [{ name: "蒂普提克 谭道", eng: "Diptyque - Tam Dao", top: "玫瑰、意大利柏树", mid: "檀香木、雪松、紫檀", base: "辛香料、琥珀、白麝香" }, { name: "川久保玲 京都", eng: "Comme des Garcons - Kyoto", top: "焚香、柏树、丝柏", mid: "柚木、香根草", base: "蜡菊、广藿香、咖啡" }, { name: "阿蒂仙 冥府之路", eng: "L'Artisan - Passage d'Enfer", top: "玫瑰、生姜", mid: "百合、焚香", base: "檀香木、白麝香、安息香脂" }] },
+            'ECTI': { desc: "迷人但危险，体面却疯狂。脑回路由复杂的悖论组成，充斥着微醺的干邑白兰地、怪诞的晚香玉与危险的辛香。", quotes: ["“在这杯色泽如琥珀的毒酒中，我看到了理智正在绝望地溺亡。” ——《恶之花》波德莱尔", "“晚香玉是带着剧毒的圣女，它用纯白的伪装绞杀每一个靠近的信徒。” ——《逆天》于斯曼", "“在逻辑的尽头，唯有微醺的荒诞才能解释这世界的错位。” ——《解体概要》齐奥朗"], perfumes: [{ name: "潘海利根 兽首·鹿", eng: "Penhaligon's - The Tragedy of Lord George", top: "干邑白兰地、朗姆酒", mid: "木质香、剃须皂香", base: "零陵香豆、琥珀" }, { name: "蒂普提克 杜桑", eng: "Diptyque - Do Son", top: "橙花、玫瑰、鸢尾花", mid: "晚香玉、粉红胡椒", base: "安息香脂、麝香" }, { name: "马利 德利纳", eng: "Parfums de Marly - Delina", top: "荔枝、大黄、香柠檬", mid: "土耳其玫瑰、牡丹", base: "喀什米尔木、焚香" }] },
+            'ICTI': { desc: "如同大雨过后的潮湿泥土，或是灰烬中的一缕轻烟。习惯与孤独为伴，在广藿香与杜松的交织中，具有极端的灵魂美学。", quotes: ["“第一滴雨砸向干涸的泥土，释放出万物腐朽时那令人心碎的芬芳。” ——《百年孤独》马尔克斯", "“那些惨白的菊花，不是为了祭奠死者，而是为了嘲笑生者的虚妄。” ——《地狱一季》兰波", "“青苔是时间的唾液，它缓慢地吞噬掉所有被世人遗忘的角落。” ——《不安之书》佩索阿"], perfumes: [{ name: "勒拉博 树果19", eng: "Le Labo - Baie 19", top: "杜松浆果、广藿香", mid: "水汽、绿叶", base: "龙涎香、潮湿土壤" }, { name: "解放橘郡 阴暗森林", eng: "Etat Libre d'Orange - Hermann...", top: "黑加仑芽、白松香", mid: "潮土醚、玫瑰", base: "降龙涎香醚、泥土气息" }, { name: "芦丹氏 深渊书简", eng: "Serge Lutens - De Profundis", top: "菊花、绿叶", mid: "紫罗兰、泥土气息", base: "灰烬、焚香" }] },
+            'ESFI': { desc: "永远晶莹剔透，如同初夏的清甜脆梨与明亮白花。固执地相信世界上所有的善意与美好，灵魂明亮充满生机。", quotes: ["“即便明日天寒地冻，今日的果实依然要溢出那无可救药的清甜汁水。” ——《切罗基人的夜曲》", "“这纤弱的花瓣之所以明亮，是因为它从不曾凝视过地下的深渊。” ——《草叶集》惠特曼", "“撕开那层金黄的柑橘皮吧，让阳光以最猛烈的形式溅入你的眼睛。” ——《二十首情诗》聂鲁达"], perfumes: [{ name: "祖玛珑 英国梨与小苍兰", eng: "Jo Malone - English Pear & Freesia", top: "威廉梨、香瓜", mid: "小苍兰、玫瑰", base: "广藿香、麝香、琥珀" }, { name: "香奈儿 邂逅柔情", eng: "Chanel - Chance Eau Tendre", top: "葡萄柚、木梨", mid: "茉莉、风信子", base: "麝香、鸢尾花、琥珀" }, { name: "马克雅克布 雏菊", eng: "Marc Jacobs - Daisy", top: "紫罗兰叶、血柚、草莓", mid: "栀子花、茉莉", base: "麝香、白木、香草" }] },
+            'ISFI': { desc: "总是在缅怀不曾存在过的梦境。灵魂脆弱、诗意且破碎，散发着阵雨过后紫罗兰与泥土交织的空灵花香。", quotes: ["“阵雨过后的紫罗兰，它的香气是对那些未曾发生的爱情最苍白的悼念。” ——《追忆似水年华》", "“鸢尾花的根茎深埋于泥沼，开出的却是一场带着水汽的虚无幻梦。” ——《玫瑰之名》埃科", "“天空中落下的每一滴水，都在替那些不敢哭泣的灵魂冲刷人间的尘埃。” ——《先知》纪伯伦"], perfumes: [{ name: "娇兰 阵雨过后", eng: "Guerlain - Après l'Ondée", top: "茴香、橙花油", mid: "紫罗兰、康乃馨、茉莉", base: "鸢尾花、香草、天芥菜" }, { name: "馥马尔 冬之水", eng: "Frederic Malle - L'Eau d'Hiver", top: "柑橘、当归", mid: "鸢尾花、山楂", base: "天芥菜、白麝香、蜂蜜" }, { name: "帕尔玛之水 桃金娘加州桂", eng: "Acqua di Parma - Mirto di Panarea", top: "桃金娘、罗勒、柠檬", mid: "海水、茉莉", base: "乳香、杜松、琥珀" }] },
+            'ECFI': { desc: "自由、不羁、如一阵风。带着黄香李与非洲金盏花的异域阳光，拒绝被关系定义，在路上才是你的终极归宿。", quotes: ["“风扬起沙漠里的金盏花，那是一个游牧民族不肯落叶归根的倔强。” ——《流浪者之歌》黑塞", "“未曾被驯化的野李子，酸涩中藏着那属于旷野的、狂风般的不羁。” ——《呼啸山庄》艾米莉·勃朗特", "“将肉体献给烈日，将灵魂交给琥珀，我们在永恒的流浪中拒绝所有的锚点。” ——《奥德赛》荷马"], perfumes: [{ name: "蔻依 流浪者", eng: "Chloé - Nomade", top: "黄香李、香柠檬", mid: "小苍兰、茉莉", base: "橡木苔、琥珀木、广藿香" }, { name: "百瑞德 非洲之旅", eng: "Byredo - Bal d'Afrique", top: "香柠檬、非洲金盏花", mid: "紫罗兰、仙客来", base: "黑琥珀、麝香、摩洛哥雪松" }, { name: "爱马仕 橘彩星光", eng: "Hermès - Eau des Merveilles", top: "橙子、榄香脂", mid: "琥珀、粉红胡椒", base: "杉木、马达加斯加香根草" }] },
+            'ICFI': { desc: "带着血腥气与辛辣交织的暗黑玫瑰。柔软至极，却也散发着广藿香的苦涩，随时准备与世界决战的披荆斩棘的浪漫主义。", quotes: ["“不要摘下那朵带血的玫瑰，它的刺正是为了在你的灵魂上刻下烙印而生。” ——《夜间飞行》", "“最奢华的香气，往往孕育在不见天日、与泥土和真菌纠缠的至暗地底。” ——《恶之花》波德莱尔", "“在冷杉林的深处，有一场只属于野兽和月光的、带着草药味的狂欢。” ——《荒原狼》黑塞"], perfumes: [{ name: "阿蒂仙 小偷玫瑰", eng: "L'Artisan - Voleur de Roses", top: "李子、苹果、老鹳草", mid: "保加利亚玫瑰、茶香玫瑰", base: "广藿香、琥珀" }, { name: "汤姆·福特 黑之黑", eng: "Tom Ford - Noir de Noir", top: "藏红花", mid: "黑玫瑰、松露", base: "广藿香、沉香(乌木)" }, { name: "潘海利根 月亮女神", eng: "Penhaligon's - Luna", top: "柠檬、苦橙", mid: "玫瑰、杜松子", base: "凤仙花、龙涎香、冷杉" }] },
+            'EASTER_CRAZY': { desc: "你的精神状态已经超越了碳基生物的理解范畴，只有最原始、直冲天灵盖的冰片与薄荷脑能镇住你的气场。", quotes: ["“那股直冲天灵盖的凛冽，是众神为了唤醒装睡的凡人所降下的冰冷神罚。” ——《摩诃婆罗多》", "“在樟脑的剧烈挥发中，我看到所有的常识都像薄雾一样被轻蔑地吹散了。” ——《裸体午餐》巴罗斯", "“既然世界是一场巨大的错乱，不如用一滴辛辣的绿水，给这荒诞加冕。” ——《堂吉诃德》塞万提斯"], perfumes: [{ name: "六神 冰莲香型花露水", eng: "Liushen - Florida Water Ice Lotus", top: "薄荷、冰片、酒精", mid: "金银花、冰莲", base: "本草提取物、笑傲江湖" }, { name: "风油精 经典薄荷", eng: "Essential Balm - Classic Mint", top: "桉油、直冲天灵盖", mid: "薄荷脑、樟脑", base: "丁香油、超凡脱俗" }, { name: "中华老字号 清凉油", eng: "Tiger Balm - Cooling Ointment", top: "薄荷油、东方神秘", mid: "樟脑、辛辣刺激", base: "桂皮油、防晕止吐" }] }
+        };
+
+        const el = id => document.getElementById(id);
+        
+        let currentIdx = 0;
+        let questions = [];
+        let scores = { E: 0, I_soc: 0, S: 0, C: 0, T: 0, F: 0, R: 0, I_phi: 0 };
+        let triggeredEgg = null;
+        let top1Index = 0;
+        let radarChartInstance = null;
+
+        function shuffle(arr) {
+            return arr.sort(() => Math.random() - 0.5);
+        }
+
+        function init() {
+            el('btn-start').onclick = startQuiz;
+            el('btn-copy').onclick = copyLink;
+            top1Index = Math.floor(Math.random() * 3);
+        }
+
+        function startQuiz() {
+            let baseQs = initialQs.slice(0, 12);
+            let eggQs = initialQs.slice(12);
+            
+            shuffle(baseQs);
+            baseQs.forEach(q => shuffle(q.opts));
+            
+            questions = [...baseQs, ...eggQs];
+            
+            el('view-start').classList.add('hidden');
+            el('view-quiz').classList.remove('hidden');
+            renderQ();
+        }
+
+        function renderQ() {
+            let q = questions[currentIdx];
+            el('q-text').innerText = q.text;
+            el('q-progress').style.width = ((currentIdx / questions.length) * 100) + '%';
+            el('q-count').innerText = `SCENE ${currentIdx + 1} / ${questions.length}`;
+            
+            let optsDiv = el('q-opts');
+            optsDiv.innerHTML = '';
+            
+            q.opts.forEach(opt => {
+                let btn = document.createElement('button');
+                btn.className = 'w-full text-left p-5 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all text-sm sm:text-base leading-relaxed';
+                btn.innerText = opt.t;
+                btn.onclick = () => handleAns(opt.s);
+                optsDiv.appendChild(btn);
+            });
+        }
+
+        function handleAns(s) {
+            if (s.trigger_egg) {
+                triggeredEgg = s.trigger_egg;
+            } else {
+                for (let k in s) {
+                    scores[k] += s[k];
+                }
+            }
+
+            if (currentIdx < questions.length - 1) {
+                currentIdx++;
+                renderQ();
+            } else {
+                calculateResult();
+            }
+        }
+
+        function calculateResult() {
+            el('view-quiz').classList.add('hidden');
+            el('view-loading').classList.remove('hidden');
+            el('view-loading').classList.add('flex');
+
+            // 缩短25%的等待时间：2500ms -> 1800ms
+            setTimeout(() => {
+                let l1 = scores.E > scores.I_soc ? 'E' : 'I';
+                let l2 = scores.S > scores.C ? 'S' : 'C';
+                let l3 = scores.T > scores.F ? 'T' : 'F';
+                let l4 = scores.R > scores.I_phi ? 'R' : 'I';
+                let code = `${l1}${l2}${l3}${l4}`;
+
+                if (triggeredEgg === 'EASTER_CRAZY' && scores.C >= 7) {
+                    code = 'EASTER_CRAZY';
+                }
+
+                showResult(code);
+            }, 1800);
+        }
+
+        function showResult(code) {
+            el('view-loading').classList.add('hidden');
+            el('view-loading').classList.remove('flex');
+            el('view-result').classList.remove('hidden');
+
+            const resData = resultsDB[code];
+            const topPerfume = resData.perfumes[top1Index];
+            const randomQuote = resData.quotes[Math.floor(Math.random() * resData.quotes.length)];
+
+            // 加载对应的 AI 香水图片
+            const imgEl = el('res-image');
+            const placeholderEl = el('res-img-placeholder');
+            imgEl.classList.add('hidden');
+            placeholderEl.style.display = 'flex';
+            // 严格使用小写文件名拼接，并匹配 Python 脚本输出的 1, 2, 3 序号
+            imgEl.src = `/assets/perfumes/${code.toLowerCase()}-${top1Index + 1}.webp`;
+            imgEl.classList.remove('hidden');
+
+            // 修改点：不再显示原型代号，直接显示中文名和英文名
+            let titleName = code === 'EASTER_CRAZY' ? '专属隐藏彩蛋' : topPerfume.name;
+            let engName = code === 'EASTER_CRAZY' ? 'Exclusive Hidden Easter Egg' : topPerfume.eng;
+            el('res-code').innerHTML = `${titleName}<br><span class="text-sm text-zinc-400 font-normal mt-2 block tracking-normal">${engName}</span>`;
+            
+            el('res-desc').innerText = resData.desc;
+            el('res-quote').innerText = randomQuote;
+
+            let cTop = code.charAt(0) === 'E' 
+                ? "如同爆裂的粉红胡椒与清甜柑橘，明亮高调，带有极强的挥发性与热情张扬。" 
+                : "如同清冷的早春晨露与水感醛香，疏离克制，保持着极度完美的社交边界感。";
+
+            let cMid1 = code.charAt(1) === 'S' ? '薰衣草与干净皂香般的情绪极度稳定' : '微醺烈酒与辛香料般的随时准备发疯';
+            let cMid2 = code.charAt(2) === 'T' ? '交织着雪松般绝对理智的冰冷感' : '交织着盛放红玫瑰般浪漫至死的感性';
+            let cMid = `${cMid1}，${cMid2}。`;
+
+            let cBase = code.charAt(3) === 'R' 
+                ? "沉淀为潮湿泥土与广藿香，带着对世俗现实的清醒羁绊与扎实底色。" 
+                : "挥发为缥缈的檀香与灰烬，渴望出世，回归灵魂深处的虚无缥缈。";
+
+            if (code === 'EASTER_CRAZY') {
+                cTop = "如同高纯度风油精，100% 直冲天灵盖的凛冽。";
+                cMid = "超越碳基生物理解的辛辣与精神错乱。";
+                cBase = "沉淀为超脱三界之外的看破红尘与防晕止吐。";
+            }
+
+            el('comp-top').innerText = cTop;
+            el('comp-mid').innerText = cMid;
+            el('comp-base').innerText = cBase;
+
+            const perfContainer = el('res-perfumes');
+            perfContainer.innerHTML = '';
+            resData.perfumes.forEach((p, idx) => {
+                // 修改点：跳过已经展示过的 Top 1 香水，只展示剩下的两款
+                if (idx === top1Index) return;
+
+                let div = document.createElement('div');
+                div.className = `p-4 rounded-xl border border-zinc-800 bg-zinc-900/40`;
+                div.innerHTML = `
+                    <h3 class="font-bold text-sm mb-1 text-white">${p.name}</h3>
+                    <p class="text-[10px] text-zinc-500 mb-3">${p.eng}</p>
+                    <div class="text-[11px] sm:text-xs space-y-2 text-zinc-400">
+                        <p><span class="text-zinc-600 w-10 inline-block font-bold">前调</span> ${p.top}</p>
+                        <p><span class="text-zinc-600 w-10 inline-block font-bold">中调</span> ${p.mid}</p>
+                        <p><span class="text-zinc-600 w-10 inline-block font-bold">后调</span> ${p.base}</p>
+                    </div>
+                `;
+                perfContainer.appendChild(div);
+            });
+
+            renderRadarChart();
+        }
+
+        function renderRadarChart() {
+            const ctx = el('radarChart').getContext('2d');
+            if(radarChartInstance) radarChartInstance.destroy();
+            
+            radarChartInstance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['社交(E)', '稳重(S)', '理智(T)', '现实(R)', '内敛(I)', '疯狂(C)', '感性(F)', '虚无(I)'],
+                    datasets: [{
+                        label: '潜意识分布',
+                        data: [scores.E, scores.S, scores.T, scores.R, scores.I_soc, scores.C, scores.F, scores.I_phi],
+                        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                        borderColor: 'rgba(255, 255, 255, 0.6)',
+                        pointBackgroundColor: 'rgba(255, 255, 255, 1)',
+                        pointBorderColor: '#000',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#000',
+                        borderWidth: 1.5,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)', circular: true },
+                            pointLabels: { 
+                                color: 'rgba(255, 255, 255, 0.5)', 
+                                font: { family: 'Noto Serif SC', size: 10 }
+                            },
+                            ticks: { display: false, max: 9, min: 0, stepSize: 3 }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleFont: { family: 'Noto Serif SC' },
+                            bodyFont: { family: 'Noto Serif SC' },
+                            displayColors: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function copyLink() {
+            const fakeUrl = window.location.href + "?ref=soul_fragrance";
+            navigator.clipboard.writeText(fakeUrl).then(() => {
+                const toast = el('toast');
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }).catch(err => {
+                alert('复制失败，请手动复制浏览器地址栏链接。');
+            });
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
